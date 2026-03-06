@@ -15,9 +15,10 @@ export class CoursesService {
     //le service doit être statless ( ne garde pas en mémoire des données de l'application)
     // les méthodes du service doivenet retourner un observable
     loadALLCourses(): Observable<Course[]> {
-        return this.http.get<Course[]>("/api/courses").pipe(
-            map(res => res["payload"])
-        );
-    } 
+        return this.http.get<Course[]>("/api/courses")
+            .pipe(
+                map(res => res["payload"])
+            );
+    }
 
 }

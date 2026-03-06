@@ -1,42 +1,51 @@
-import {Component, OnInit} from '@angular/core';
-import {Course, sortCoursesBySeqNo} from '../model/course';
-import {interval, noop, Observable, of, throwError, timer} from 'rxjs';
-import {catchError, delay, delayWhen, filter, finalize, map, retryWhen, shareReplay, tap} from 'rxjs/operators';
+import { Component, inject, OnInit } from '@angular/core';
+import { Course, sortCoursesBySeqNo } from '../model/course';
+import { interval, noop, Observable, of, throwError, timer } from 'rxjs';
+import { catchError, delay, delayWhen, filter, finalize, map, retryWhen, shareReplay, tap } from 'rxjs/operators';
 import { HttpClient } from '@angular/common/http';
-import {MatDialog, MatDialogConfig} from '@angular/material/dialog';
-import {CourseDialogComponent} from '../course-dialog/course-dialog.component';
+import { MatDialog, MatDialogConfig } from '@angular/material/dialog';
+import { CourseDialogComponent } from '../course-dialog/course-dialog.component';
+import { CoursesService } from '../service/courses.service';
 
 
 @Component({
-    selector: 'home',
-    templateUrl: './home.component.html',
-    styleUrls: ['./home.component.css'],
-    standalone: false
+  selector: 'home',
+  templateUrl: './home.component.html',
+  styleUrls: ['./home.component.css'],
+  standalone: false
 })
 export class HomeComponent implements OnInit {
 
-  beginnerCourses: Course[];
+  beginnerCourses$: Observable<Course[]>;
 
-  advancedCourses: Course[];
+  advancedCourses$: Observable<Course[]>;
 
+  private readonly courcesService = inject(CoursesService);
+  private dialog = inject(MatDialog);
 
-  constructor(private http: HttpClient, private dialog: MatDialog) {
+  // la vue ne connait pas comment les données sont récupérées, elle les prend qu' a travers les observables.  
 
-  }
-
+  // async du html: permet de s'abonner à l'observable et met en disposition les données au UI
+  // en plus au moment ou on a plus besoin de l'observable se désabonner de ce dernier et comme ça 
+  // on aura pas la fuite de mémoire
   ngOnInit() {
 
-    this.http.get('/api/courses')
-      .subscribe(
-        res => {
+    const cources$ = this.courcesService.loadALLCourses().pipe(
+      map(courses => courses.sort(sortCoursesBySeqNo))
+    );
+    // BEGINNER COURSERS
+    this.beginnerCourses$ = cources$.pipe(
+      map(courses =>
+        courses.filter(course => course.category == "BEGINNER")
+      )
+    );
 
-          const courses: Course[] = res["payload"].sort(sortCoursesBySeqNo);
-
-          this.beginnerCourses = courses.filter(course => course.category == "BEGINNER");
-
-          this.advancedCourses = courses.filter(course => course.category == "ADVANCED");
-
-        });
+    // ADVANCED COURSERS
+    this.advancedCourses$ = cources$.pipe(
+      map(courses =>
+        courses.filter(course => course.category == "ADVANCED")
+      )
+    );
 
   }
 
