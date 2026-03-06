@@ -30,6 +30,19 @@ export class HomeComponent implements OnInit {
   // on aura pas la fuite de mémoire
   ngOnInit() {
 
+
+    
+    // Rappel: dès qu'on fait un subscription à un observeable de type HTTP, ce dernier s'exécute, c-a-d fait appel à l'api.
+    
+    // Antipattern :
+    // un grand soucis dans cette conception, car on a beginnerCourses$ et advancedCourses$ qui font un subscribe
+    // à l'observable cources$ à travers Angular async, et à chaque subscription, il y aura exécution
+    // du subsribe définit dans le courses.service et du coup il y aura 2 appels à l'api courses
+    
+    // solution : NB cetet sol est utilisée uniquement qu'en cas d'observable de type HTTP
+    // il faut faire une seule fois la rêquete vers l'api courses.
+    // pour cela on utilise shareReply de rsJs
+
     const cources$ = this.courcesService.loadALLCourses().pipe(
       map(courses => courses.sort(sortCoursesBySeqNo))
     );
