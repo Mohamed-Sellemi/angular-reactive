@@ -1,15 +1,14 @@
-import {AfterViewInit, Component, ElementRef, Inject, OnInit, ViewChild, ViewEncapsulation} from '@angular/core';
+import {AfterViewInit, Component, ElementRef, EventEmitter, inject, Inject, OnInit, Output, output, ViewChild, ViewEncapsulation} from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef, MatDialogTitle, MatDialogContent, MatDialogActions } from "@angular/material/dialog";
 import {Course} from "../model/course";
 import { FormBuilder, Validators, FormGroup, ReactiveFormsModule } from "@angular/forms";
 import moment from 'moment';
-import {catchError} from 'rxjs/operators';
-import {throwError} from 'rxjs';
 import { CdkScrollable } from '@angular/cdk/scrolling';
 import { MatFormField, MatInput, MatSuffix } from '@angular/material/input';
 import { MatSelect, MatOption } from '@angular/material/select';
 import { MatDatepickerInput, MatDatepickerToggle, MatDatepicker } from '@angular/material/datepicker';
 import { MatButton } from '@angular/material/button';
+import { CoursesService } from '../service/courses.service';
 
 @Component({
     selector: 'course-dialog',
@@ -22,15 +21,18 @@ export class CourseDialogComponent implements AfterViewInit {
     form: FormGroup;
 
     course:Course;
-
+    private readonly coursesService = inject(CoursesService);
+   
+    private fb = inject(FormBuilder);
     constructor(
-        private fb: FormBuilder,
-        private dialogRef: MatDialogRef<CourseDialogComponent>,
+        
+        private dialogRef: MatDialogRef<CourseDialogComponent>,       
+
         @Inject(MAT_DIALOG_DATA) course:Course) {
 
         this.course = course;
 
-        this.form = fb.group({
+        this.form = this.fb.group({
             description: [course.description, Validators.required],
             category: [course.category, Validators.required],
             releasedAt: [moment(), Validators.required],
@@ -46,6 +48,13 @@ export class CourseDialogComponent implements AfterViewInit {
     save() {
 
       const changes = this.form.value;
+      this.coursesService.saveCourse(this.course.id, changes)
+        .subscribe(
+            val => {
+                this.dialogRef.close(val);                
+            }
+        );
+
 
     }
 

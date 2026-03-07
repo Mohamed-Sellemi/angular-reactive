@@ -91,6 +91,121 @@ courses$ = this.coursesService.loadCourses().pipe(
 
 `shareReplay` met le résultat en cache et le **partage** entre tous les souscripteurs — évitant ainsi les appels HTTP redondants.
 
+
+## Modifier un cours avec un service stateless
+
+### Schéma du flux
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        HomeComponent                            │
+│                     (Container / Smart)                         │
+│                                                                 │
+│  Écoute @Output()  ◄──────────────────────────────────────┐    │
+│  (courseChanged)                                           │    │
+└─────────────────────────────────────────────────────────────┘   │
+          │                                                  │    │
+          ▼                                                  │    │
+┌─────────────────────────┐                                  │    │
+│   CoursesCardList       │                                  │    │
+│  (Présentation / Dumb)  │                                  │    │
+│                         │   ④ EventEmitter                 │    │
+│  dialogRef.afterClosed()│──── courseChanged ───────────────┘    │
+│  ③ subscribe            │                                       │
+└─────────────────────────┘                                       │
+          │                                                        │
+          │ ouvre le dialog                                        │
+          ▼                                                        │
+┌─────────────────────────┐       ┌──────────────────────────┐    │
+│    CourseDialogComponent│       │      CoursesService       │    │
+│       (Popup)           │──────►│     (Stateless)           │    │
+│                         │  ①   │                           │    │
+│  save()                 │  call │  saveCourse(id, changes)  │    │
+│                         │◄──────│  → http.put(...)          │    │
+│  dialogRef.close(val) ──┘  ②   │  → retourne Observable    │    │
+│                         │  val  └──────────────────────────┘    │
+└─────────────────────────┘                                        │
+```
+
+---
+
+### Les étapes détaillées
+
+#### ① Service — ajout de `saveCourse()`
+
+Dans `CoursesService`, on ajoute une méthode `saveCourse()` qui utilise `http.put` pour modifier un cours côté API. Le service reste **stateless** : il ne stocke rien, il retourne simplement un observable.
+
+```ts
+saveCourse(courseId: string, changes: Partial<Course>): Observable<any> {
+  return this.http.put(`/api/courses/${courseId}`, changes);
+}
+```
+**NB: dans saveCourse on utilise aussi shareReply pour garder en mémoire la valeur retourner de l'API et exécuter une seule fois.**
+---
+
+#### ② Popup — `CourseDialogComponent`
+
+Dans le composant dialog, on crée une méthode `save()` qui :
+1. Souscrit à `saveCourse()` du service
+2. Ferme le popup en passant la valeur récupérée depuis l'observable via `dialogRef.close(val)`
+
+```ts
+save() {
+  const changes = this.form.value;
+
+  this.coursesService.saveCourse(this.course.id, changes)
+    .subscribe(
+      val => {
+        this.dialogRef.close(val); // ② on ferme en passant la valeur
+      }
+    );
+}
+```
+
+> `dialogRef.close(val)` est clé : si `val` est défini, cela signifie que le popup s'est fermé suite à une **sauvegarde**, pas suite au bouton "Fermer".
+
+---
+
+#### ③ `CoursesCardListComponent` — écoute de la fermeture du dialog
+
+Après ouverture du dialog, on souscrit à `afterClosed()` pour savoir **pourquoi** le popup s'est fermé :
+
+- `val` est défini → fermeture suite à une **sauvegarde** → on informe le parent
+- `val` est `undefined` → fermeture via le bouton **"Fermer"** → on ne fait rien
+
+```ts
+const dialogRef = this.dialog.open(CourseDialogComponent, { data: course });
+
+dialogRef.afterClosed().subscribe(val => {
+  if (val) {
+    this.courseChanged.emit(val); // ④ on informe le parent uniquement si sauvegarde, sachant que courseChanged est eventEmitter()
+  }
+});
+```
+
+---
+
+#### ④ `CoursesCardListComponent` → `HomeComponent` via `@Output()`
+
+`CoursesCardListComponent` remonte l'événement au container parent `HomeComponent` via un `EventEmitter` :
+
+```ts
+@Output() courseChanged = new EventEmitter<Course>();
+```
+
+`HomeComponent` écoute cet événement pour déclencher un rechargement des données si nécessaire. parceque on'est aujourd'hui dans une application stateless, donc obligé de recharger les données (`coursesAdvanced$`, `coursesBeginner$`).
+
+---
+
+### Résumé du flux
+
+| Étape | Qui | Quoi |
+|---|---|---|
+| ① | `CoursesService` | `http.put` → retourne un Observable |
+| ② | `CourseDialogComponent` | Subscribe → `dialogRef.close(val)` |
+| ③ | `CoursesCardListComponent` | Subscribe à `afterClosed()` → vérifie `val` |
+| ④ | `CoursesCardListComponent` | Émet `courseChanged` vers `HomeComponent` |
+
 ## Convertir vers un projet Angular standalone
 la commande ci-dessous permet de convertir un projet Angular avec les modules vers un projet `standalone`
 - Il faut exécuté cette commande 3 fois, sur 3 étapes et à chaque fois il faut choisir dans le menu interactif.
@@ -101,3 +216,62 @@ ng generate @angular/core:standalone
 1- `Convert all components, directives and pipes to standalone`.
 2- `Remove unnecessary NgModule classes`.
 3- `Switch to standalone bootstrapping API`.
+
+## Passage de données à un composant fils 
+
+### @Input() via template HTML
+```html
+<!-- Parent -->
+<course-card-list [courses]="courses$"></course-card-list>
+```
+```ts
+// Enfant
+@Input() courses: Course[] = [];
+```
+### Cas Dialog : popup
+Le popup est crée de façon dynamique, n'est pas déclaré dans un template HTML. Angular matérialise lui-même le composant en mémoire.
+
+Le passage se fait en 2 temps:
+① On met le course dans la config avant d'ouvrir
+```ts
+// CoursesCardListComponent
+dialogConfig.data = course;  // 👈 on emballe le course ici
+
+this.dialog.open(CourseDialogComponent, dialogConfig);
+```
+② Le dialog le récupère via @Inject(MAT_DIALOG_DATA)
+```ts
+// CourseDialogComponent
+constructor(
+  private dialogRef: MatDialogRef<CourseDialogComponent>,
+  @Inject(MAT_DIALOG_DATA) course: Course  // 👈 Angular injecte ce qui était dans dialogConfig.data
+) {
+  this.course = course;
+}
+```
+`MAT_DIALOG_DATA` est un **token d'injection** — c'est une clé que Angular Material utilise pour transporter `dialogConfig.data` jusqu'au constructeur du dialog. C'est du système d'**injection de dépendances** d'Angular, pas du binding de template.
+
+## Schéma comparatif
+```
+── Via @Input() ──────────────────────────────────────────
+  Template HTML          Composant enfant
+  ┌─────────────┐        ┌──────────────────┐
+  │ [course]=   │──────► │ @Input() course   │
+  │ "myCourse"  │        │                  │
+  └─────────────┘        └──────────────────┘
+  Lien déclaratif dans le HTML
+
+
+── Via MAT_DIALOG_DATA ───────────────────────────────────
+  Code TypeScript        Dialog (créé dynamiquement)
+  ┌─────────────────┐    ┌──────────────────────────────┐
+  │ dialogConfig    │    │ constructor(                  │
+  │  .data = course │──► │  @Inject(MAT_DIALOG_DATA)    │
+  │                 │    │  course: Course               │
+  │ dialog.open()   │    │ )                             │
+  └─────────────────┘    └──────────────────────────────┘
+  Lien via l'injection de dépendances (DI)
+  ```
+
+
+
