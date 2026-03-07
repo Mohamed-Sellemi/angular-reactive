@@ -20,8 +20,7 @@ import {Lesson} from '../model/lesson';
 @Component({
     selector: 'course',
     templateUrl: './course.component.html',
-    styleUrls: ['./course.component.css'],
-    standalone: false
+    styleUrls: ['./course.component.css']
 })
 export class CourseComponent implements OnInit {
 

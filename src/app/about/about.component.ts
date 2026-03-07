@@ -15,6 +15,7 @@ import {
   ReplaySubject, from
 } from 'rxjs';
 import {delayWhen, filter, map, take, timeout} from 'rxjs/operators';
+import { MatButton } from '@angular/material/button';
 
 
 
@@ -22,7 +23,7 @@ import {delayWhen, filter, map, take, timeout} from 'rxjs/operators';
     selector: 'about',
     templateUrl: './about.component.html',
     styleUrls: ['./about.component.css'],
-    standalone: false
+    imports: [MatButton]
 })
 export class AboutComponent implements OnInit {
 

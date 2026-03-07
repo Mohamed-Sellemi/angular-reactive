@@ -15,13 +15,16 @@ import {
 } from 'rxjs/operators';
 import {merge, fromEvent, Observable, concat} from 'rxjs';
 import {Lesson} from '../model/lesson';
+import { MatFormField, MatInput } from '@angular/material/input';
+import { MatButton } from '@angular/material/button';
+import { MatIcon } from '@angular/material/icon';
 
 
 @Component({
     selector: 'course',
     templateUrl: './search-lessons.component.html',
     styleUrls: ['./search-lessons.component.css'],
-    standalone: false
+    imports: [MatFormField, MatInput, MatButton, MatIcon]
 })
 export class SearchLessonsComponent implements OnInit {
 
