@@ -320,8 +320,7 @@ AppComponent_1                    AppComponent_2
 ```
 
 ### Expliquer pourquoi utilisons un observable pour afficher ou cacher le spinner
-```
- ```ts
+```ts
 isLoading: boolean = false;
 ```
 
@@ -356,3 +355,159 @@ Mise à jour UI                    Manuelle / polling     Automatique ✅
 Notification des abonnés          ❌ aucune             ✅ automatique
 Utilisable avec async pipe        ❌                    ✅
 Adapté à Angular réactif          ❌                    ✅
+
+
+## Pourquoi rajouter un observable de type subject dans LoadingService
+
+### Le problème — un Observable normal est en lecture seule
+Un Observable de base, tu peux seulement t'abonner pour écouter des valeurs. Tu ne peux pas pousser une nouvelle valeur dedans de l'extérieur.
+
+```ts
+loading$ = new Observable<boolean>(); 
+
+loading$.next(true); // ❌ IMPOSSIBLE — .next() n'existe pas sur Observable
+
+`Observable` n'a pas de méthode `.next()`. C'est un **récepteur**, pas un émetteur.
+
+```
+### Différence entre un observable HTTP et un observable perso
+```ts
+// Cas 1 — HTTP
+loadAllCourses(): Observable<Course[]> {
+  return this.http.get<Course[]>("/api/courses"); 
+}
+
+// Cas 2 — BehaviorSubject
+private loadingSubject = new BehaviorSubject<boolean>(false);
+loading$ = this.loadingSubject.asObservable();
+```
+
+---
+
+## Cas 1 — `http.get` : qui contrôle les émissions ?
+
+C'est **Angular/RxJS en interne** qui gère tout. Quand tu fais `http.get(...)`, Angular crée un observable ET gère lui-même le `.next()` et le `.complete()` en coulisses.
+```
+Tu ne vois pas ce code, mais il existe quelque part dans Angular :
+
+observableInterne.next(response)   // ← Angular appelle ça quand l'API répond
+observableInterne.complete()       // ← Angular appelle ça après
+observableInterne.error(err)       // ← Angular appelle ça si erreur
+```
+
+Toi tu reçois juste **l'observable résultant** — tu ne gères pas les émissions, Angular le fait pour toi. C'est pour ça qu'on dit qu'il "émet des valeurs" même si techniquement tu ne vois que le `return`.
+```
+Angular HTTP internals          Toi
+┌─────────────────────┐        ┌──────────────────────┐
+│ appel API           │        │ loadAllCourses()      │
+│ réponse reçue       │        │   .subscribe(        │
+│ .next(response) ───►│───────►│     courses => ...   │
+│ .complete()         │        │   )                  │
+└─────────────────────┘        └──────────────────────┘
+  Angular gère les émissions     Tu consommes seulement
+```
+
+---
+
+## Cas 2 — `BehaviorSubject` : qui contrôle les émissions ?
+
+Ici il n'y a pas d'Angular ou de RxJS "en coulisses" qui gère les émissions. **C'est TOI qui décides** quand émettre `true` ou `false` via `.next()`. Donc tu as besoin d'accès direct au `BehaviorSubject`.
+
+### `BehaviorSubject` — le double rôle
+
+`BehaviorSubject` est à la fois :
+- un **Observable** → on peut s'y abonner pour écouter
+- un **émetteur** → on peut lui pousser des valeurs avec `.next()`
+```
+BehaviorSubject<boolean>
+┌─────────────────────────────────┐
+│                                 │
+│  .next(true)  ◄── on écrit      │  ← rôle émetteur
+│                                 │
+│  .asObservable() ──► abonnés    │  ← rôle observable
+│                                 │
+└─────────────────────────────────┘
+```
+```
+Toi (LoadingService)            Abonnés
+┌─────────────────────┐        ┌──────────────────────┐
+│ loadingOn()         │        │ loading$ | async     │
+│ .next(true)  ──────►│───────►│ affiche spinner ✅   │
+│                     │        │                      │
+│ loadingOff()        │        │                      │
+│ .next(false) ──────►│───────►│ cache spinner ✅     │
+└─────────────────────┘        └──────────────────────┘
+  Tu gères les émissions         Les composants consomment
+```
+### Pourquoi ne pas exposer directement le BehaviorSubject ?
+```ts
+loading$ = new BehaviorSubject<boolean>(false);
+
+// Dans LoadingComponent
+loadingService.loading$.next(false); // 😱 n'importe qui peut écrire !
+```
+N'importe quel composant pourrait appeler `.next()` directement et modifier l'état — c'est dangereux. On perd le contrôle sur qui peut modifier la valeur.
+
+✅ La solution est de spéarer lecture et écriture
+```ts
+@Injectable()
+export class LoadingService {
+
+  // ① privé — seul le service peut écrire dedans
+  private loadingSubject = new BehaviorSubject<boolean>(false);
+
+  // ② public — les composants peuvent seulement écouter
+  loading$ = this.loadingSubject.asObservable();
+
+  loadingOn() {
+    this.loadingSubject.next(true);  // ✅ seul le service écrit
+  }
+
+  loadingOff() {
+    this.loadingSubject.next(false); // ✅ seul le service écrit
+  }
+}
+```
+```
+LoadingService
+┌──────────────────────────────────────────────┐
+│                                              │
+│  private loadingSubject ──► .next(true/false)│ ← seul le service écrit
+│          │                                   │
+│          │ .asObservable()                   │
+│          ▼                                   │
+│  public loading$ ───────────────────────────►│ ← composants écoutent
+│                                              │
+└──────────────────────────────────────────────┘
+         │                        │
+         ▼                        ▼
+   HomeComponent          LoadingComponent
+   loadingOn()            loading$ | async
+   loadingOff()           affiche/cache spinner
+   ```
+
+## Lier le spinner avec HomeComponent
+
+Le spinner est liée au cycle de vie de l'observable qui permet de charger les courses
+il doit être affiché au début de téléchargement des cours, ensuite il doit être caché lorsque l'observable termine de charger tous les courses ou une génération d'erreur.
+
+### principe:
+- activer l'affichage de spinner 
+```ts
+changeCourse() {
+    this.loadingService.loadingOn();
+    const cources$ = this.courcesService.loadALLCourses().pipe(
+        //...
+```
+
+- cacher le spinner dès l'observable termine
+```ts
+const cources$ = this.courcesService.loadALLCourses().pipe(
+      map(courses => courses.sort(sortCoursesBySeqNo)),
+      finalize(() => this.loadingService.loadingOff())
+    );
+```
+📢 le `finalize()`: est exécuté dès que l'observable complète d'envoyer les éléments, ou bien dès qu'il y a une erreur qui se produit.
+
+
+
