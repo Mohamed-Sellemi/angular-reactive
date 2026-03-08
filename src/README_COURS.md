@@ -213,9 +213,9 @@ la commande ci-dessous permet de convertir un projet Angular avec les modules ve
 ```bash
 ng generate @angular/core:standalone
 ```
-1- `Convert all components, directives and pipes to standalone`.
-2- `Remove unnecessary NgModule classes`.
-3- `Switch to standalone bootstrapping API`.
+- 1 `Convert all components, directives and pipes to standalone`.
+- 2 `Remove unnecessary NgModule classes`.
+- 3 `Switch to standalone bootstrapping API`.
 
 ## Passage de données à un composant fils 
 
@@ -350,11 +350,12 @@ LoadingService                    LoadingComponent
  ```
 
  Résumé
-                                  boolean normal |       Observable<boolean>
-Mise à jour UI                    Manuelle / polling     Automatique ✅
-Notification des abonnés          ❌ aucune             ✅ automatique
-Utilisable avec async pipe        ❌                    ✅
-Adapté à Angular réactif          ❌                    ✅
+ | | `boolean` normal | `Observable<boolean>` |
+|---|---|---|
+| Mise à jour UI | Manuelle / polling | Automatique ✅ |
+| Notification des abonnés | ❌ aucune | ✅ automatique |
+| Utilisable avec `async` pipe | ❌ | ✅ |
+| Adapté à Angular réactif | ❌ | ✅ |
 
 
 ## Pourquoi rajouter un observable de type subject dans LoadingService
@@ -579,5 +580,7 @@ HomeComponent          LoadingService
 ### Avantage: 🚀
 
 ① Responsabilité unique — toute la logique du spinner est encapsulée dans LoadingService. Le composant ne sait rien.
+
 ② Réutilisable — n'importe quel composant peut l'utiliser en une ligne, sans se soucier du loadingOn/Off.
+
 ③ Sûr — finalize() est toujours appelé, même en cas d'erreur. Impossible d'oublier d'éteindre le spinner.
