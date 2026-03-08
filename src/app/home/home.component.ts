@@ -9,6 +9,7 @@ import { CoursesService } from '../service/courses.service';
 import { CoursesCardListComponent } from '../courses-card-list/courses-card-list.component';
 import { MatTabGroup, MatTab } from '@angular/material/tabs';
 import { AsyncPipe } from '@angular/common';
+import { LoadingService } from '../loading/loading.service';
 
 
 @Component({
@@ -24,7 +25,7 @@ export class HomeComponent implements OnInit {
   advancedCourses$: Observable<Course[]>;
 
   private readonly courcesService = inject(CoursesService);
-  
+  private readonly loadingService = inject(LoadingService);
 
 
   ngOnInit() {

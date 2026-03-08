@@ -273,5 +273,86 @@ constructor(
   Lien via l'injection de dépendances (DI)
   ```
 
+## Communication entre plusieurs composants à des niveaux différents
 
+Supposons qu'on a plusieurs composants qui se trouvent dans différents niveaux de l'application et qui veulent interaginr (communiquer) entre eux.
 
+✅ La solution la plus simple est d'utiliser un service partageable (Shared service)
+
+### Exemple:
+On veut rajouter un spinner, utilisé au moment d'interaction avec l'api, il existe différents emplacements de communication avec l'API, 
+Par exemple `HomeComponent` on charge les courses, `CourseDialogComponent` modifier un course. 
+- Le principe de mettre le spinner dans `AppComponent` en tant que composant global à l'application, ensuite quel composant à besoin de spinner peut l'utiliser.
+- Le spinner va être cacher par défaut, au moment ou un composant veut afficher le spinner, il doit informer `AppComponent` quand il affiche le spinner et quand il doit le cacher.
+- pour faciliter l'interaction entre différent composants qui peuvent se trouver dans différents niveau de l'application tel le cas de `HomeComponent` et `CourseDialogComponent` avec `AppComponent` on doit créer un **service partageable** c'est `LoadingService`.
+- Le service `LoadingService` doit être injecter au différent emplacement ou il sera utilisé, dans notre cas `HomeComponent` et `CourseDialogComponent` et bien sûr dans `LoadingComponent`.
+- Le composant `LoadingComponent` va interagir avec le reste de l'application à travers le service `LoadingService`.
+- Le service `LoadingService` ne doit pas être un singleton, si non il bloquera l'exécution des autres composant au moment qu'il s'exécute sur un composant.
+- Puisque le service `LoadingService` n'est pas un singleton, donc il n'a pas de `providedIn: 'root'` on doit mentionner ou se service sera utilisé, dans notre cas c'est dans `AppComponent` donc il faut rajouter ceci
+```ts
+@Component({
+    //....
+ providers: [
+      LoadingService
+    ]
+})
+```
+```
+AppComponent  (instance LoadingService créée ici)
+    │
+    ├── LoadingComponent       ◄── même instance
+    ├── HomeComponent          ◄── même instance
+    └── CourseDialogComponent  ◄── même instance
+```
+### Expliquer pour le service ne doit pas être singleton au niveau root:
+```
+Avec root — si tu as PLUSIEURS AppComponent (ex: micro-frontends,
+tests unitaires, ou plusieurs instances de l'app) :
+
+AppComponent_1                    AppComponent_2
+  HomeComponent                     HomeComponent
+        │                                 │
+        └──────────► Instance UNIQUE ◄────┘
+                     LoadingService
+                     
+  Le show() de App1 affiche le spinner de App2 !
+
+```
+
+### Expliquer pourquoi utilisons un observable pour afficher ou cacher le spinner
+```
+ ```ts
+isLoading: boolean = false;
+```
+
+`LoadingComponent` devrait **interroger** la valeur en permanence pour savoir si elle a changé. Il n'y a aucun mécanisme automatique pour dire "hé, la valeur a changé, mets à jour l'UI".
+```
+LoadingService          LoadingComponent
+┌──────────────┐        ┌──────────────────────┐
+│ isLoading    │        │ comment je sais que  │
+│ = false      │   ??   │ isLoading a changé ? │
+│              │        │ je poll toutes les   │
+│              │        │ X ms ? 😬            │
+└──────────────┘        └──────────────────────┘
+```
+
+---
+
+## Avec un `Observable<boolean>`
+
+L'observable est un **flux** — dès que la valeur change, **tous les abonnés sont notifiés automatiquement**. C'est le principe du pattern **Observer**.
+```
+LoadingService                    LoadingComponent
+┌─────────────────────┐           ┌──────────────────────┐
+│ loading$            │  push !   │ | async              │
+│ Observable<boolean> │ ────────► │ reçoit true/false    │
+│                     │           │ met à jour l'UI ✅   │
+└─────────────────────┘           └──────────────────────┘
+ ```
+
+ Résumé
+                                  boolean normal |       Observable<boolean>
+Mise à jour UI                    Manuelle / polling     Automatique ✅
+Notification des abonnés          ❌ aucune             ✅ automatique
+Utilisable avec async pipe        ❌                    ✅
+Adapté à Angular réactif          ❌                    ✅

@@ -9,6 +9,7 @@ import { MatSelect, MatOption } from '@angular/material/select';
 import { MatDatepickerInput, MatDatepickerToggle, MatDatepicker } from '@angular/material/datepicker';
 import { MatButton } from '@angular/material/button';
 import { CoursesService } from '../service/courses.service';
+import { LoadingService } from '../loading/loading.service';
 
 @Component({
     selector: 'course-dialog',
@@ -22,7 +23,7 @@ export class CourseDialogComponent implements AfterViewInit {
 
     course:Course;
     private readonly coursesService = inject(CoursesService);
-   
+    private readonly loadingService = inject(LoadingService);
     private fb = inject(FormBuilder);
     constructor(
         
