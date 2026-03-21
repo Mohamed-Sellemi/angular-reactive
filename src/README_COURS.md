@@ -584,3 +584,47 @@ HomeComponent          LoadingService
 ② Réutilisable — n'importe quel composant peut l'utiliser en une ligne, sans se soucier du loadingOn/Off.
 
 ③ Sûr — finalize() est toujours appelé, même en cas d'erreur. Impossible d'oublier d'éteindre le spinner.
+
+
+## Problème de spinner dans l'édition d'un cours
+
+Le service `LoadingService` est fourni dans `AppComponent` via `providers` :
+```ts
+@Component({
+  // ...
+  providers: [LoadingService]
+})
+```
+```html
+<loading></loading>
+```
+
+Tous les composants **fils** d'`AppComponent` peuvent utiliser cette instance de `LoadingService`.
+
+⚠️ Cependant, `CourseDialogComponent` est instancié **dynamiquement** par Angular Material :
+```ts
+const dialogConfig = new MatDialogConfig();
+this.dialog.open(CourseDialogComponent, dialogConfig);
+```
+
+Ce composant n'est pas déclaré dans le template d'`AppComponent` — il est créé en dehors de l'arbre des composants fils. Il **ne peut donc pas accéder** à l'instance de `LoadingService` d'`AppComponent`.
+
+### Solution
+
+Déclarer `LoadingService` et `<loading>` directement dans `CourseDialogComponent` :
+```ts
+@Component({
+  // ...
+  providers: [LoadingService]
+})
+```
+```html
+<loading></loading>
+```
+
+> ⚠️ **Attention** : cette approche crée **deux instances distinctes** de `LoadingService` :
+> - Une instance pour `AppComponent` et ses fils
+> - Une instance pour `CourseDialogComponent` et ses fils
+>
+> Les deux spinners fonctionnent de façon **totalement indépendante** l'un de l'autre.
+
